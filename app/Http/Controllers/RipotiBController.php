@@ -30,17 +30,7 @@ class RipotiBController extends Controller
             ->make(true);
     }
 
-    public function create()
-    {
-        $today = Carbon::now();
-
-        $b_transactions = BTransaction::whereDate('transaction_time', '2022-02-16')->get();
-        $p_transaction = PartnerTransaction::whereDate('created_at', $today)->get()->groupBy('institution');
-
-        dd($b_transactions, $p_transaction);
-
-
-    }
+   
 
 
     public function download()
