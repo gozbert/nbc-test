@@ -6,6 +6,8 @@ use App\Models\BTransaction;
 use App\Models\PartnerTransaction;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 
 class DailyTransMismatch extends Command
@@ -51,32 +53,46 @@ class DailyTransMismatch extends Command
             $transactions = collect($trans);
             $transaction_refs = $transactions->pluck('transaction_ref');
 
-            $b_transactions_not_exists = $b_transactions->whereNotIn('transaction_ref', $transaction_refs);
+            $b_transactions_exists = $b_transactions->whereIn('transaction_ref', $transaction_refs);
 
-            $total_mismatch = $b_transactions->sum('amount');
+            $b_transactions_not_exists = $transactions->whereNotIn('transaction_ref', $b_transactions_exists->pluck('transaction_ref'));
 
-            $message = 'Bank B and ' . $key . ', Mismatch Amount for ' . $today->diffForHumans() . ' is ' . $total_mismatch;
+            $total_mismatch = $b_transactions_not_exists->sum('amount');
+
+            $message = 'Bank B and ' . $key . ', Mismatch Amount for ' . $today->toDateString() . ' is ' . $total_mismatch;
 
 
             if ($key == 'InstitutionY') {
-                $response = [
+                $data = [
                     'messaget' => $message,
                     'mismatchAmount' => $total_mismatch,
                     "transactions" => $b_transactions_not_exists->toArray(),
                 ];
+
+                $response = Http::post('http://httpbin.org/put', $data);
+                if (!$response->ok()) {
+                    return response([
+                        'errors' => [['ThirdParty connection error status code '. $response->status()]],
+                    ], 423);
+                }
+
             } else {
-                $this->sendEmail('', $message);
+                $this->sendEmail($message, $key);
             }
+
+            Log::channel($key)->info("Notification Sent");
         }
     }
 
-    public function sendEmail($email, $message)
+    public function sendEmail($subject, $name)
     {
 
-        Mail::send('Amount Mismatch', function ($message) {
+        $data = array('subject' => $subject, 'name' => $name);
+
+        Mail::send('mail', $data, function ($message) {
             $message->from('inhousedevelopment@nbc.co.tz');
-            $message->to($message);
-            $message->subject($message);
+            $message->to('test@gmail.com');
+            $message->subject('Amount Mismatch');
         });
     }
 }
